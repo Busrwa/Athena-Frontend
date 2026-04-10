@@ -1,21 +1,26 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { colors, radius, spacing } from '../theme';
+import { colors, radius } from '../theme';
 
 export default function MarketCard({ label, price, change, prefix = '' }) {
-  const isPositive = parseFloat(change) >= 0;
-  const changeColor = isPositive ? colors.green : colors.red;
+  const isPositive = change != null && parseFloat(change) > 0;
+  const isZero = change == null || parseFloat(change) === 0;
+  const changeColor = isZero ? colors.textMuted : (isPositive ? colors.green : colors.red);
 
   return (
     <View style={styles.card}>
       <Text style={styles.label}>{label}</Text>
-      <Text style={styles.price}>
+      <Text style={styles.price} numberOfLines={1}>
         {prefix}
         {typeof price === 'number'
           ? price.toLocaleString('tr-TR', { maximumFractionDigits: 2 })
           : (price ?? '--')}
       </Text>
-      <View style={[styles.changePill, { backgroundColor: isPositive ? colors.greenDim : colors.redDim }]}>
+      <View style={[styles.changePill, {
+        backgroundColor: isZero
+          ? colors.bgCardAlt
+          : (isPositive ? colors.greenDim : colors.redDim)
+      }]}>
         <Text style={[styles.change, { color: changeColor }]}>
           {isPositive ? '+' : ''}
           {typeof change === 'number' ? change.toFixed(2) : (change ?? '0')}%
@@ -27,7 +32,7 @@ export default function MarketCard({ label, price, change, prefix = '' }) {
 
 const styles = StyleSheet.create({
   card: {
-    flex: 1,
+    width: 100,           // flex:1 değil, sabit genişlik — yatay scroll için şart
     backgroundColor: colors.bgCard,
     borderRadius: radius.md,
     borderWidth: 1,
@@ -35,7 +40,6 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 10,
     alignItems: 'center',
-    marginHorizontal: 3,
   },
   label: {
     fontSize: 9,

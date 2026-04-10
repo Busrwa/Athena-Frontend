@@ -1,7 +1,7 @@
 import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { View, Text, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, Dimensions } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -14,76 +14,125 @@ import HistoryScreen from './src/screens/HistoryScreen';
 import { colors } from './src/theme';
 
 const Tab = createBottomTabNavigator();
+const SCREEN_WIDTH = Dimensions.get('window').width;
 
-// SVG-style minimal icons using text/symbols — no emoji
-const ICONS = {
-  Dashboard: { icon: '◈', label: 'Dashboard' },
-  Budget:    { icon: '◎', label: 'Butce' },
-  Positions: { icon: '▦', label: 'Pozisyon' },
-  Chat:      { icon: '◉', label: 'Athena' },
-  History:   { icon: '◫', label: 'Gecmis' },
-};
-
-function TabIcon({ iconKey, focused }) {
-  const item = ICONS[iconKey];
+// — View tabanlı ikonlar —
+function DashIcon({ color }) {
   return (
-    <View style={{ alignItems: 'center', justifyContent: 'center', gap: 3 }}>
-      <Text style={{
-        fontSize: 18,
-        color: focused ? colors.primary : colors.textMuted,
-        lineHeight: 20,
-      }}>
-        {item.icon}
-      </Text>
-      <Text style={{
-        fontSize: 9,
-        fontWeight: focused ? '700' : '400',
-        color: focused ? colors.primary : colors.textMuted,
-        letterSpacing: 0.8,
-        textTransform: 'uppercase',
-      }}>
-        {item.label}
-      </Text>
+    <View style={{ width: 16, height: 16, alignItems: 'center', justifyContent: 'center' }}>
+      <View style={{ width: 9, height: 9, borderWidth: 1.5, borderColor: color, transform: [{ rotate: '45deg' }] }} />
+    </View>
+  );
+}
+function BudgetIcon({ color }) {
+  return (
+    <View style={{ width: 16, height: 16, alignItems: 'center', justifyContent: 'center' }}>
+      <View style={{ width: 13, height: 13, borderRadius: 6.5, borderWidth: 1.5, borderColor: color }} />
+    </View>
+  );
+}
+function PozIcon({ color }) {
+  const s = { width: 4, height: 4, borderWidth: 1.5, borderColor: color };
+  return (
+    <View style={{ width: 16, height: 16, alignItems: 'center', justifyContent: 'center', gap: 2 }}>
+      <View style={{ flexDirection: 'row', gap: 2 }}>
+        <View style={s} /><View style={s} />
+      </View>
+      <View style={{ flexDirection: 'row', gap: 2 }}>
+        <View style={s} /><View style={s} />
+      </View>
+    </View>
+  );
+}
+function ChatIcon({ color }) {
+  return (
+    <View style={{ width: 16, height: 16, alignItems: 'center', justifyContent: 'center' }}>
+      <View style={{ width: 13, height: 13, borderRadius: 6.5, borderWidth: 1.5, borderColor: color, alignItems: 'center', justifyContent: 'center' }}>
+        <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: color }} />
+      </View>
+    </View>
+  );
+}
+function HistoryIcon({ color }) {
+  return (
+    <View style={{ width: 16, height: 16, alignItems: 'center', justifyContent: 'center' }}>
+      <View style={{ width: 10, height: 13, borderWidth: 1.5, borderColor: color, borderRadius: 2 }} />
+    </View>
+  );
+}
+
+const TAB_CONFIG = [
+  { name: 'Dashboard', Icon: DashIcon,    label: 'BOARD' },
+  { name: 'Budget',    Icon: BudgetIcon,  label: 'BÜTÇE' },
+  { name: 'Positions', Icon: PozIcon,     label: 'POZİSYON' },
+  { name: 'Chat',      Icon: ChatIcon,    label: 'ATHENA' },
+  { name: 'History',   Icon: HistoryIcon, label: 'GEÇMİŞ' },
+];
+
+// Tamamen custom tab bar — wrap sorunu yok
+function CustomTabBar({ state, navigation }) {
+  const insets = useSafeAreaInsets();
+  const itemWidth = SCREEN_WIDTH / TAB_CONFIG.length;
+
+  return (
+    <View style={{
+      flexDirection: 'row',
+      backgroundColor: '#0A0A0A',
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+      paddingBottom: insets.bottom,
+      paddingTop: 8,
+      height: 52 + insets.bottom,
+    }}>
+      {TAB_CONFIG.map((tab, index) => {
+        const focused = state.index === index;
+        const color = focused ? colors.primary : colors.textSecondary;
+        const { Icon } = tab;
+
+        return (
+          <TouchableOpacity
+            key={tab.name}
+            onPress={() => navigation.navigate(tab.name)}
+            style={{
+              width: itemWidth,
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 4,
+            }}
+            activeOpacity={0.7}
+          >
+            <Icon color={color} />
+            <Text
+              numberOfLines={1}
+              style={{
+                fontSize: 8,
+                fontWeight: focused ? '700' : '500',
+                color,
+                letterSpacing: 0.3,
+                textAlign: 'center',
+                width: itemWidth - 4,
+              }}
+            >
+              {tab.label}
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
     </View>
   );
 }
 
 function AppNavigator() {
-  const insets = useSafeAreaInsets();
-  const tabBarHeight = 50 + insets.bottom;
-
   return (
     <Tab.Navigator
-      screenOptions={({ route }) => ({
-        headerShown: false,
-        tabBarShowLabel: false,
-        tabBarIcon: ({ focused }) => {
-          const keyMap = {
-            'Dashboard': 'Dashboard',
-            'Budget': 'Budget',
-            'Positions': 'Positions',
-            'Chat': 'Chat',
-            'History': 'History',
-          };
-          return <TabIcon iconKey={keyMap[route.name]} focused={focused} />;
-        },
-        tabBarStyle: {
-          backgroundColor: '#0A0A0A',
-          borderTopColor: colors.border,
-          borderTopWidth: 1,
-          height: tabBarHeight,
-          paddingBottom: insets.bottom,
-          paddingTop: 6,
-          elevation: 0,
-          shadowOpacity: 0,
-        },
-      })}
+      tabBar={(props) => <CustomTabBar {...props} />}
+      screenOptions={{ headerShown: false }}
     >
       <Tab.Screen name="Dashboard" component={DashboardScreen} />
-      <Tab.Screen name="Budget" component={BudgetScreen} />
+      <Tab.Screen name="Budget"    component={BudgetScreen} />
       <Tab.Screen name="Positions" component={PositionsScreen} />
-      <Tab.Screen name="Chat" component={ChatScreen} />
-      <Tab.Screen name="History" component={HistoryScreen} />
+      <Tab.Screen name="Chat"      component={ChatScreen} />
+      <Tab.Screen name="History"   component={HistoryScreen} />
     </Tab.Navigator>
   );
 }

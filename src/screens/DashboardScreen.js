@@ -36,18 +36,30 @@ export default function DashboardScreen({ navigation }) {
     );
   }
 
-  const bist = market?.overview?.bist100;
-  const usd = market?.overview?.usdtry;
-  const altin = market?.overview?.altin;
+  // Backend BÜYÜK HARF key döndürüyor — bist100/usdtry değil, BIST30/USDTRY
+  const overview = market?.overview || {};
+  const bist30  = overview['BIST30'];
+  const usdtry  = overview['USDTRY'];
+  const eurtry  = overview['EURTRY'];
+  const altin   = overview['ALTIN_USD'];
+  const gumus   = overview['GUMUS_USD'];
+  const petrol  = overview['PETROL_WTI'];
+  const btc     = overview['BTC'];
+  const eth     = overview['ETH'];
+
   const acilUyarilar = durum?.acil_uyarilar || [];
   const hasActivePlan = durum && !durum.error;
 
   return (
     <ScrollView
       style={styles.container}
-      contentContainerStyle={{ paddingTop: insets.top }}
+      contentContainerStyle={{ paddingTop: insets.top, paddingBottom: 20 }}
       refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchData(); }} tintColor={colors.primary} />
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={() => { setRefreshing(true); fetchData(); }}
+          tintColor={colors.primary}
+        />
       }
     >
       {/* Header */}
@@ -65,75 +77,108 @@ export default function DashboardScreen({ navigation }) {
       {/* Acil Uyarilar */}
       {acilUyarilar.length > 0 && (
         <View style={styles.alertBanner}>
-          <Text style={styles.alertTitle}>UYARI</Text>
+          <Text style={styles.alertTitle}>⚠️ ACİL UYARI</Text>
           {acilUyarilar.map((u, i) => (
             <Text key={i} style={styles.alertText}>{u}</Text>
           ))}
         </View>
       )}
 
-      {/* Piyasa */}
+      {/* Piyasa kartları — yatay scroll */}
       <View style={styles.sectionHeader}>
-        <Text style={styles.sectionLabel}>PIYASA</Text>
+        <Text style={styles.sectionLabel}>PİYASA</Text>
         <Text style={styles.sectionTime}>
           {new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}
         </Text>
       </View>
-      <View style={styles.marketRow}>
-        <MarketCard label="BIST 100" price={bist?.price} change={bist?.change_percent} />
-        <MarketCard label="USD/TRY" price={usd?.price} change={usd?.change_percent} prefix="" />
-        <MarketCard label="ALTIN" price={altin?.price} change={altin?.change_percent} prefix="$" />
-      </View>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.marketRow}>
+        {bist30  && <MarketCard label="BIST 30" price={bist30.price}    change={bist30.change_percent}  />}
+        {usdtry  && <MarketCard label="USD/TRY" price={usdtry.rate}     change={usdtry.change_percent}  />}
+        {eurtry  && <MarketCard label="EUR/TRY" price={eurtry.rate}     change={eurtry.change_percent}  />}
+        {altin   && <MarketCard label="ALTIN"   price={altin.price}     change={altin.change_percent}   prefix="$" />}
+        {gumus   && <MarketCard label="GÜMÜŞ"   price={gumus.price}     change={gumus.change_percent}   prefix="$" />}
+        {petrol  && <MarketCard label="PETROL"  price={petrol.price}    change={petrol.change_percent}  prefix="$" />}
+        {btc     && <MarketCard label="BTC"     price={btc.price_usd}   change={btc.change_percent}     prefix="$" />}
+        {eth     && <MarketCard label="ETH"     price={eth.price_usd}   change={eth.change_percent}     prefix="$" />}
+      </ScrollView>
 
-      {/* Portfoy Ozet */}
-      <Text style={styles.sectionLabel2}>PORTFOY</Text>
+      {/* Portfoy */}
+      <Text style={styles.sectionLabel2}>PORTFÖY</Text>
 
       {hasActivePlan ? (
         <TouchableOpacity style={styles.planCard} onPress={() => navigation.navigate('Positions')}>
           <View style={styles.planTop}>
             <View>
-              <Text style={styles.planSubLabel}>GUNCEL DEGER</Text>
+              <Text style={styles.planSubLabel}>GÜNCEL DEĞER</Text>
               <Text style={styles.planValue}>
                 {durum.toplam_guncel != null ? `${durum.toplam_guncel.toFixed(0)} TL` : '--'}
               </Text>
             </View>
-            <View style={[styles.kzBox, { backgroundColor: durum.toplam_kaz_kayip >= 0 ? colors.greenDim : colors.redDim }]}>
-              <Text style={[styles.kzVal, { color: durum.toplam_kaz_kayip >= 0 ? colors.green : colors.red }]}>
-                {durum.toplam_kaz_kayip >= 0 ? '+' : ''}{durum.toplam_kaz_kayip_pct?.toFixed(2)}%
+            <View style={[styles.kzBox, {
+              backgroundColor: (durum.toplam_kaz_kayip || 0) >= 0 ? colors.greenDim : colors.redDim,
+            }]}>
+              <Text style={[styles.kzVal, {
+                color: (durum.toplam_kaz_kayip || 0) >= 0 ? colors.green : colors.red,
+              }]}>
+                {(durum.toplam_kaz_kayip || 0) >= 0 ? '+' : ''}{(durum.toplam_kaz_kayip_pct || 0).toFixed(2)}%
               </Text>
-              <Text style={[styles.kzSub, { color: durum.toplam_kaz_kayip >= 0 ? colors.green : colors.red }]}>
-                {durum.toplam_kaz_kayip >= 0 ? '+' : ''}{durum.toplam_kaz_kayip?.toFixed(0)} TL
+              <Text style={[styles.kzSub, {
+                color: (durum.toplam_kaz_kayip || 0) >= 0 ? colors.green : colors.red,
+              }]}>
+                {(durum.toplam_kaz_kayip || 0) >= 0 ? '+' : ''}{(durum.toplam_kaz_kayip || 0).toFixed(0)} TL
               </Text>
             </View>
           </View>
           <View style={styles.planBottom}>
-            <Text style={styles.planMeta}>{durum.acik_pozisyon_sayisi} acik pozisyon</Text>
-            <Text style={styles.planArrow}>Detay  ›</Text>
+            <Text style={styles.planMeta}>{durum.acik_pozisyon_sayisi} açık pozisyon</Text>
+            <Text style={styles.planArrow}>Detay ›</Text>
           </View>
         </TouchableOpacity>
       ) : (
         <TouchableOpacity style={styles.ctaCard} onPress={() => navigation.navigate('Budget')}>
-          <Text style={styles.ctaLabel}>BASLAYALIM</Text>
-          <Text style={styles.ctaTitle}>Butce olustur, Athena{'\n'}80 hisse tarasin</Text>
+          <Text style={styles.ctaLabel}>BAŞLAYALIM</Text>
+          <Text style={styles.ctaTitle}>Bütçe oluştur, Athena{'\n'}80 hisse tarasın</Text>
           <View style={styles.ctaBtn}>
-            <Text style={styles.ctaBtnText}>BUTCE OLUSTUR</Text>
+            <Text style={styles.ctaBtnText}>BÜTÇE OLUŞTUR</Text>
           </View>
         </TouchableOpacity>
       )}
 
-      {/* Top Kazananlar */}
+      {/* Yükselenler */}
       {market?.top_gainers?.length > 0 && (
         <View style={styles.section}>
-          <Text style={styles.sectionLabel2}>EN COK YUKSELEN</Text>
+          <Text style={styles.sectionLabel2}>EN ÇOK YÜKSELEN</Text>
           <View style={styles.stockList}>
-            {market.top_gainers.slice(0, 5).map((s) => (
+            {market.top_gainers.map((s) => (
               <View key={s.symbol} style={styles.stockRow}>
                 <Text style={styles.stockSymbol}>{s.symbol}</Text>
                 <View style={styles.stockRight}>
                   <Text style={styles.stockPrice}>{s.price?.toFixed(2)} TL</Text>
-                  <View style={[styles.changeBadge, { backgroundColor: s.change_percent >= 0 ? colors.greenDim : colors.redDim }]}>
-                    <Text style={[styles.stockChange, { color: s.change_percent >= 0 ? colors.green : colors.red }]}>
-                      {s.change_percent >= 0 ? '+' : ''}{s.change_percent?.toFixed(2)}%
+                  <View style={[styles.changeBadge, { backgroundColor: colors.greenDim }]}>
+                    <Text style={[styles.stockChange, { color: colors.green }]}>
+                      +{s.change_percent?.toFixed(2)}%
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            ))}
+          </View>
+        </View>
+      )}
+
+      {/* Düşenler */}
+      {market?.top_losers?.length > 0 && (
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel2}>EN ÇOK DÜŞEN</Text>
+          <View style={styles.stockList}>
+            {market.top_losers.map((s) => (
+              <View key={s.symbol} style={styles.stockRow}>
+                <Text style={styles.stockSymbol}>{s.symbol}</Text>
+                <View style={styles.stockRight}>
+                  <Text style={styles.stockPrice}>{s.price?.toFixed(2)} TL</Text>
+                  <View style={[styles.changeBadge, { backgroundColor: colors.redDim }]}>
+                    <Text style={[styles.stockChange, { color: colors.red }]}>
+                      {s.change_percent?.toFixed(2)}%
                     </Text>
                   </View>
                 </View>
@@ -152,67 +197,44 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.bg },
   loadingText: { color: colors.textSecondary, marginTop: 12, fontSize: 12, letterSpacing: 1 },
-
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.lg,
-    paddingBottom: spacing.md,
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingHorizontal: spacing.lg, paddingTop: spacing.lg, paddingBottom: spacing.md,
   },
   headerLabel: { fontSize: 9, color: colors.textSecondary, letterSpacing: 2, fontWeight: '600' },
   headerTitle: { fontSize: 30, fontWeight: '900', color: colors.white, letterSpacing: -0.5, marginTop: 2 },
   liveTag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.bgCard,
-    borderRadius: 20,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderWidth: 1,
-    borderColor: colors.border,
-    gap: 5,
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: colors.bgCard, borderRadius: 20,
+    paddingHorizontal: 10, paddingVertical: 5,
+    borderWidth: 1, borderColor: colors.border, gap: 5,
   },
   liveDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: colors.green },
   liveText: { fontSize: 9, color: colors.textSecondary, letterSpacing: 1, fontWeight: '600' },
-
   alertBanner: {
     backgroundColor: colors.redDim,
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: colors.red,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    marginBottom: spacing.sm,
+    borderTopWidth: 1, borderBottomWidth: 1, borderColor: colors.red,
+    paddingHorizontal: spacing.lg, paddingVertical: spacing.md, marginBottom: spacing.sm,
   },
   alertTitle: { fontSize: 9, color: colors.red, fontWeight: '700', letterSpacing: 1.5, marginBottom: 6 },
   alertText: { color: colors.red, fontSize: 13, lineHeight: 20 },
-
   sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-    marginBottom: 10,
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingHorizontal: spacing.lg, marginBottom: 10,
   },
   sectionLabel: { fontSize: 9, color: colors.textSecondary, letterSpacing: 2, fontWeight: '700' },
   sectionTime: { fontSize: 9, color: colors.textMuted, letterSpacing: 1 },
-  sectionLabel2: { fontSize: 9, color: colors.textSecondary, letterSpacing: 2, fontWeight: '700', paddingHorizontal: spacing.lg, marginTop: spacing.lg, marginBottom: 10 },
-
-  marketRow: {
-    flexDirection: 'row',
-    paddingHorizontal: spacing.md,
-    marginBottom: spacing.sm,
+  sectionLabel2: {
+    fontSize: 9, color: colors.textSecondary, letterSpacing: 2,
+    fontWeight: '700', paddingHorizontal: spacing.lg,
+    marginTop: spacing.lg, marginBottom: 10,
   },
-
+  // Yatay scroll için flex:1 OLMAZ, sabit genişlik lazım
+  marketRow: { paddingHorizontal: spacing.md, paddingBottom: spacing.sm, gap: 8 },
   planCard: {
-    backgroundColor: colors.bgCard,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    marginHorizontal: spacing.md,
-    padding: spacing.md,
+    backgroundColor: colors.bgCard, borderRadius: radius.lg,
+    borderWidth: 1, borderColor: colors.border,
+    marginHorizontal: spacing.md, padding: spacing.md,
   },
   planTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
   planSubLabel: { fontSize: 9, color: colors.textSecondary, letterSpacing: 1.5, fontWeight: '600', marginBottom: 4 },
@@ -220,39 +242,30 @@ const styles = StyleSheet.create({
   kzBox: { borderRadius: radius.md, padding: 10, alignItems: 'flex-end' },
   kzVal: { fontSize: 18, fontWeight: '800' },
   kzSub: { fontSize: 11, fontWeight: '600', marginTop: 2 },
-  planBottom: { flexDirection: 'row', justifyContent: 'space-between', borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 10 },
+  planBottom: {
+    flexDirection: 'row', justifyContent: 'space-between',
+    borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 10,
+  },
   planMeta: { fontSize: 11, color: colors.textSecondary },
   planArrow: { fontSize: 11, color: colors.primary, fontWeight: '700' },
-
   ctaCard: {
-    backgroundColor: colors.bgCard,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.primaryBorder,
-    marginHorizontal: spacing.md,
-    padding: spacing.lg,
+    backgroundColor: colors.bgCard, borderRadius: radius.lg,
+    borderWidth: 1, borderColor: colors.primaryBorder,
+    marginHorizontal: spacing.md, padding: spacing.lg,
   },
   ctaLabel: { fontSize: 9, color: colors.primary, letterSpacing: 2, fontWeight: '700', marginBottom: 8 },
   ctaTitle: { fontSize: 20, fontWeight: '800', color: colors.white, lineHeight: 28, marginBottom: 20 },
   ctaBtn: { backgroundColor: colors.primary, borderRadius: radius.md, paddingVertical: 13, alignItems: 'center' },
   ctaBtnText: { color: colors.black, fontWeight: '800', fontSize: 13, letterSpacing: 1.5 },
-
   section: { marginHorizontal: spacing.md },
   stockList: {
-    backgroundColor: colors.bgCard,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    overflow: 'hidden',
+    backgroundColor: colors.bgCard, borderRadius: radius.lg,
+    borderWidth: 1, borderColor: colors.border, overflow: 'hidden',
   },
   stockRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 12,
-    paddingHorizontal: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingVertical: 12, paddingHorizontal: spacing.md,
+    borderBottomWidth: 1, borderBottomColor: colors.border,
   },
   stockSymbol: { fontSize: 14, fontWeight: '800', color: colors.white, letterSpacing: 0.5 },
   stockRight: { flexDirection: 'row', alignItems: 'center', gap: 10 },

@@ -37,9 +37,11 @@ export const spacing = { xs: 4, sm: 8, md: 16, lg: 24, xl: 32 };
 export const radius = { sm: 6, md: 10, lg: 14, xl: 20 };
 
 export const tavsiyeRenk = (t) => {
+  if (!t) return colors.textSecondary;
   if (t === 'SAT') return colors.red;
-  if (t === 'TUT_AL') return colors.green;
-  if (t === 'DIKKAT' || t === 'D\u0130KKAT') return colors.yellow;
+  if (t.includes('AL')) return colors.green;
+  if (t === 'TUT') return colors.yellow;
+  if (t === 'DIKKAT' || t.includes('DIKKAT')) return colors.yellow;
   return colors.textSecondary;
 };
 

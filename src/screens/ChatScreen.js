@@ -14,6 +14,34 @@ const QUICK_QUESTIONS = [
   'BIST bugün ne yapar?',
 ];
 
+// Basit markdown renderer: **bold** ve satır sonu
+function MarkdownText({ text, style }) {
+  if (!text) return null;
+  const lines = text.split('\n');
+  return (
+    <View>
+      {lines.map((line, li) => {
+        // **bold** parse
+        const parts = line.split(/(\*\*[^*]+\*\*)/g);
+        return (
+          <Text key={li} style={[styles.bubbleText, style, li > 0 && { marginTop: 2 }]}>
+            {parts.map((part, pi) => {
+              if (part.startsWith('**') && part.endsWith('**')) {
+                return (
+                  <Text key={pi} style={{ fontWeight: '800', color: colors.textPrimary }}>
+                    {part.slice(2, -2)}
+                  </Text>
+                );
+              }
+              return part;
+            })}
+          </Text>
+        );
+      })}
+    </View>
+  );
+}
+
 export default function ChatScreen() {
   const insets = useSafeAreaInsets();
   const [messages, setMessages] = useState([
@@ -89,7 +117,7 @@ export default function ChatScreen() {
       <ScrollView
         ref={scrollRef}
         style={styles.messages}
-        contentContainerStyle={{ padding: spacing.md }}
+        contentContainerStyle={{ padding: spacing.md, paddingBottom: 8 }}
         onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: false })}
       >
         {messages.map((m, i) => (
@@ -103,13 +131,17 @@ export default function ChatScreen() {
             {m.role === 'assistant' && (
               <Text style={styles.bubbleFrom}>ATHENA</Text>
             )}
-            <Text style={[styles.bubbleText, m.role === 'user' && styles.bubbleTextUser]}>
-              {m.content}
-            </Text>
+            {m.role === 'user' ? (
+              <Text style={[styles.bubbleText, styles.bubbleTextUser]}>{m.content}</Text>
+            ) : (
+              <MarkdownText text={m.content} />
+            )}
           </View>
         ))}
+
+        {/* Typing indicator — yuvarlak köşeli balonluk */}
         {loading && (
-          <View style={styles.bubbleBot}>
+          <View style={[styles.bubble, styles.bubbleBot]}>
             <Text style={styles.bubbleFrom}>ATHENA</Text>
             <View style={styles.typingRow}>
               <ActivityIndicator size="small" color={colors.primary} />
@@ -119,8 +151,8 @@ export default function ChatScreen() {
         )}
       </ScrollView>
 
-      {/* Input */}
-      <View style={[styles.inputRow, { paddingBottom: insets.bottom + 10 }]}>
+      {/* Input — tab bar'a yapışık */}
+      <View style={[styles.inputRow, { paddingBottom: insets.bottom > 0 ? insets.bottom : 12 }]}>
         <TextInput
           style={styles.input}
           value={input}
@@ -197,7 +229,7 @@ const styles = StyleSheet.create({
   messages: { flex: 1 },
 
   bubble: {
-    borderRadius: radius.lg,
+    borderRadius: radius.lg,     // tüm köşeler eşit yuvarlak
     padding: 12,
     marginBottom: 10,
     maxWidth: '85%',
@@ -207,12 +239,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     alignSelf: 'flex-start',
-    borderBottomLeftRadius: 4,
+    // köşeler eşit — borderBottomLeftRadius kaldırıldı
   },
   bubbleUser: {
     backgroundColor: colors.primary,
     alignSelf: 'flex-end',
-    borderBottomRightRadius: 4,
+    // köşeler eşit — borderBottomRightRadius kaldırıldı
   },
   bubbleFrom: {
     fontSize: 8,
@@ -227,6 +259,7 @@ const styles = StyleSheet.create({
   typingRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   typingText: { fontSize: 12, color: colors.textSecondary },
 
+  // input artık tam alta yapışık, boşluk yok
   inputRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',

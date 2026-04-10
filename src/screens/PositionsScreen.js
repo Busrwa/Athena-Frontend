@@ -79,6 +79,7 @@ export default function PositionsScreen() {
             refreshing={refreshing}
             onRefresh={() => { setRefreshing(true); fetchDurum(); }}
             tintColor={colors.primary}
+            progressViewOffset={60}
           />
         }
       >

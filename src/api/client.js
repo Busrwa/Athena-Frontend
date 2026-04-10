@@ -4,7 +4,7 @@ const BASE_URL = 'https://athena-backend-d45f.onrender.com';
 
 const client = axios.create({
   baseURL: BASE_URL,
-  timeout: 60000,
+  timeout: 120000,
   headers: { 'Content-Type': 'application/json' },
 });
 

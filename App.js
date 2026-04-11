@@ -62,7 +62,7 @@ function HistoryIcon({ color }) {
 }
 
 const TAB_CONFIG = [
-  { name: 'Dashboard', Icon: DashIcon,    label: 'BOARD' },
+  { name: 'Dashboard', Icon: DashIcon,    label: 'ANA SAYFA' },
   { name: 'Budget',    Icon: BudgetIcon,  label: 'BÜTÇE' },
   { name: 'Positions', Icon: PozIcon,     label: 'POZİSYON' },
   { name: 'Chat',      Icon: ChatIcon,    label: 'ATHENA' },

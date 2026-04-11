@@ -1,16 +1,17 @@
 import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView,
-  StyleSheet, ActivityIndicator, Alert,
+  StyleSheet, ActivityIndicator, RefreshControl,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { olusturButce, pozisyonAlindi } from '../api/client';
 import { colors, spacing, radius } from '../theme';
+import AthenaModal from '../components/AthenaModal';
 
 const RISK_OPTIONS = [
-  { key: 'dusuk', label: 'DÜŞÜK', sub: 'Stop -%4  /  Hedef +%8', desc: 'Güvenli, az risk' },
-  { key: 'orta',  label: 'ORTA',  sub: 'Stop -%7  /  Hedef +%15', desc: 'Dengeli strateji' },
-  { key: 'yuksek',label: 'YÜKSEK',sub: 'Stop -%10  /  Hedef +%25', desc: 'Agresif, yüksek kazanç' },
+  { key: 'dusuk', label: 'DÜŞÜK', sub: 'Stop -%4  /  Hedef +%8' },
+  { key: 'orta',  label: 'ORTA',  sub: 'Stop -%7  /  Hedef +%15' },
+  { key: 'yuksek',label: 'YÜKSEK',sub: 'Stop -%10  /  Hedef +%25' },
 ];
 
 const LOADING_MESSAGES = [
@@ -21,6 +22,8 @@ const LOADING_MESSAGES = [
   'Athena analizi yazılıyor...',
 ];
 
+const emptyModal = { visible: false, title: '', message: '', icon: '', buttons: [] };
+
 export default function BudgetScreen() {
   const insets = useSafeAreaInsets();
   const [butce, setButce] = useState('');
@@ -29,10 +32,30 @@ export default function BudgetScreen() {
   const [loadingMsgIdx, setLoadingMsgIdx] = useState(0);
   const [sonuc, setSonuc] = useState(null);
   const [alindiIds, setAlindiIds] = useState([]);
+  const [refreshing, setRefreshing] = useState(false);
+  const [modal, setModal] = useState(emptyModal);
+
+  const closeModal = () => setModal(emptyModal);
+
+  const showModal = (title, message, icon, buttons) => {
+    setModal({ visible: true, title, message, icon, buttons });
+  };
+
+  // Pull-to-refresh → formu sıfırla
+  const handleRefresh = () => {
+    setRefreshing(true);
+    setSonuc(null);
+    setAlindiIds([]);
+    setButce('');
+    setRisk('orta');
+    setTimeout(() => setRefreshing(false), 600);
+  };
 
   const handleOlustur = async () => {
     if (!butce || isNaN(parseFloat(butce))) {
-      Alert.alert('Geçersiz Bütçe', 'Lütfen geçerli bir TL miktarı girin.');
+      showModal('Geçersiz Bütçe', 'Lütfen geçerli bir TL miktarı girin.', '⚠️', [
+        { text: 'Tamam', style: 'primary', onPress: closeModal },
+      ]);
       return;
     }
     setLoading(true);
@@ -40,7 +63,6 @@ export default function BudgetScreen() {
     setAlindiIds([]);
     setLoadingMsgIdx(0);
 
-    // Her 12 saniyede mesajı değiştir
     let idx = 0;
     const msgInterval = setInterval(() => {
       idx = (idx + 1) % LOADING_MESSAGES.length;
@@ -51,11 +73,12 @@ export default function BudgetScreen() {
       const res = await olusturButce({
         toplam_butce: parseFloat(butce),
         risk_profili: risk,
-        // max_hisse_sayisi backend tarafından otomatik hesaplanıyor
       });
       setSonuc(res.data);
     } catch (e) {
-      Alert.alert('Hata', e.message || 'Bir sorun oluştu.');
+      showModal('Bağlantı Hatası', e.message || 'Bir sorun oluştu. Backend uyanıyor olabilir.', '❌', [
+        { text: 'Tamam', style: 'primary', onPress: closeModal },
+      ]);
     } finally {
       clearInterval(msgInterval);
       setLoading(false);
@@ -64,19 +87,37 @@ export default function BudgetScreen() {
   };
 
   const handleAlindi = async (poz) => {
-    try {
-      await pozisyonAlindi(poz.id);
-      setAlindiIds((p) => [...p, poz.id]);
-      Alert.alert(
-        '✅ Pozisyon Açıldı',
-        `${poz.sembol} portföyünüze eklendi.\nStop: ${poz.stop_fiyat?.toFixed(2)} TL\nHedef: ${poz.hedef_fiyat?.toFixed(2)} TL`
-      );
-    } catch (e) {
-      Alert.alert('Hata', e.message);
-    }
+    showModal(
+      'Gerçekten aldın mı?',
+      `${poz.sembol} hissesini YapıKredi'den satın aldıysan onayla. Athena takibe alacak.\n\nStop: ${poz.stop_fiyat?.toFixed(2)} TL\nHedef: ${poz.hedef_fiyat?.toFixed(2)} TL`,
+      '🛒',
+      [
+        { text: 'İptal', style: 'cancel', onPress: closeModal },
+        {
+          text: 'Evet, Aldım',
+          style: 'confirm',
+          onPress: async () => {
+            closeModal();
+            try {
+              await pozisyonAlindi(poz.id);
+              setAlindiIds((p) => [...p, poz.id]);
+              showModal(
+                'Takibe Alındı!',
+                `${poz.sembol} portföyünde açık olarak işaretlendi. Athena stop ve hedefe kadar takip edecek.`,
+                '✅',
+                [{ text: 'Harika!', style: 'confirm', onPress: closeModal }]
+              );
+            } catch (e) {
+              showModal('Hata', e.message, '❌', [
+                { text: 'Tamam', style: 'primary', onPress: closeModal },
+              ]);
+            }
+          },
+        },
+      ]
+    );
   };
 
-  // Bütçeye göre kaç hisse alınacağını göster
   const getHisseSayisi = () => {
     const b = parseFloat(butce);
     if (!b) return null;
@@ -88,177 +129,212 @@ export default function BudgetScreen() {
   const hisseSayisi = getHisseSayisi();
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={{ paddingTop: insets.top, paddingBottom: 20 }}
-      keyboardShouldPersistTaps="handled"
-    >
-      <View style={styles.header}>
-        <Text style={styles.headerLabel}>PLAN</Text>
-        <Text style={styles.headerTitle}>Bütçe{'\n'}Oluştur</Text>
-      </View>
-
-      {/* Bütçe Input */}
-      <View style={styles.block}>
-        <Text style={styles.fieldLabel}>YATIRIM BÜTÇESİ (TL)</Text>
-        <TextInput
-          style={styles.input}
-          value={butce}
-          onChangeText={setButce}
-          placeholder="0"
-          placeholderTextColor={colors.textMuted}
-          keyboardType="numeric"
-        />
-        {hisseSayisi && (
-          <Text style={styles.hisseHint}>
-            Athena bu bütçe için <Text style={{ color: colors.primary }}>{hisseSayisi} hisse</Text> seçecek
-          </Text>
-        )}
-      </View>
-
-      {/* Risk */}
-      <View style={styles.block}>
-        <Text style={styles.fieldLabel}>RİSK PROFİLİ</Text>
-        <View style={styles.riskRow}>
-          {RISK_OPTIONS.map((r) => (
-            <TouchableOpacity
-              key={r.key}
-              style={[styles.riskBtn, risk === r.key && styles.riskBtnActive]}
-              onPress={() => setRisk(r.key)}
-            >
-              <Text style={[styles.riskLabel, risk === r.key && { color: colors.primary }]}>{r.label}</Text>
-              <Text style={styles.riskSub}>{r.sub}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </View>
-
-      {/* CTA */}
-      <TouchableOpacity
-        style={[styles.mainBtn, loading && { opacity: 0.7 }]}
-        onPress={handleOlustur}
-        disabled={loading}
+    <View style={{ flex: 1, backgroundColor: colors.bg }}>
+      <ScrollView
+        contentContainerStyle={{ paddingTop: insets.top, paddingBottom: 20 }}
+        keyboardShouldPersistTaps="handled"
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={colors.primary}
+            title="Formu sıfırlıyor..."
+            titleColor={colors.textSecondary}
+          />
+        }
       >
-        {loading ? (
-          <View style={{ alignItems: 'center', gap: 8 }}>
-            <ActivityIndicator color={colors.black} />
-            <Text style={styles.mainBtnSub}>{LOADING_MESSAGES[loadingMsgIdx]}</Text>
-            <Text style={[styles.mainBtnSub, { fontSize: 10, opacity: 0.7 }]}>~1 dakika sürebilir</Text>
-          </View>
-        ) : (
-          <Text style={styles.mainBtnText}>TARAMA BAŞLAT</Text>
-        )}
-      </TouchableOpacity>
-
-      {/* Hata */}
-      {sonuc?.error && (
-        <View style={styles.errorBox}>
-          <Text style={styles.errorTitle}>SİNYAL BULUNAMADI</Text>
-          <Text style={styles.errorText}>{sonuc.error}</Text>
-          <Text style={styles.errorSub}>Taranan: {sonuc.taranan} hisse</Text>
+        <View style={styles.header}>
+          <Text style={styles.headerLabel}>PLAN</Text>
+          <Text style={styles.headerTitle}>Bütçe{'\n'}Oluştur</Text>
+          <Text style={styles.headerSub}>↓ Yukarı çekerek formu sıfırlayabilirsin</Text>
         </View>
-      )}
 
-      {/* Sonuç */}
-      {sonuc && !sonuc.error && (
-        <View style={styles.resultWrap}>
-          <View style={styles.resultSummary}>
-            <Text style={styles.resultLabel}>TARAMA TAMAMLANDI</Text>
-            <Text style={styles.resultDesc}>
-              {sonuc.taranan_hisse} hisse tarandı, {sonuc.bulunan_aday} aday bulundu
+        {/* Bütçe */}
+        <View style={styles.block}>
+          <Text style={styles.fieldLabel}>YATIRIM BÜTÇESİ (TL)</Text>
+          <TextInput
+            style={styles.input}
+            value={butce}
+            onChangeText={setButce}
+            placeholder="0"
+            placeholderTextColor={colors.textMuted}
+            keyboardType="numeric"
+          />
+          {hisseSayisi && (
+            <Text style={styles.hisseHint}>
+              Athena bu bütçe için{' '}
+              <Text style={{ color: colors.primary, fontWeight: '700' }}>{hisseSayisi} hisse</Text>{' '}
+              seçecek
             </Text>
-            <View style={styles.budgetRow}>
-              <View style={styles.budgetItem}>
-                <Text style={styles.budgetVal}>{sonuc.kullanilan_butce?.toFixed(0)} TL</Text>
-                <Text style={styles.budgetLbl}>KULLANILAN</Text>
-              </View>
-              <View style={styles.budgetSep} />
-              <View style={styles.budgetItem}>
-                <Text style={[styles.budgetVal, { color: colors.green }]}>{sonuc.kalan_nakit?.toFixed(0)} TL</Text>
-                <Text style={styles.budgetLbl}>KALAN NAKİT</Text>
-              </View>
-            </View>
-          </View>
-
-          {sonuc.athena_analiz && !sonuc.athena_analiz.includes('alınamadı') && (
-            <View style={styles.analizBox}>
-              <Text style={styles.analizLabel}>ATHENA ANALİZ</Text>
-              <Text style={styles.analizText}>{sonuc.athena_analiz}</Text>
-            </View>
           )}
-
-          {(sonuc.pozisyonlar || []).map((p) => {
-            const alindi = alindiIds.includes(p.id);
-            const sColor = p.sinyal?.includes('AL') ? colors.green : colors.red;
-            return (
-              <View key={p.id} style={styles.pozCard}>
-                <View style={styles.pozTop}>
-                  <Text style={styles.pozSembol}>{p.sembol}</Text>
-                  <View style={[styles.signalBadge, { backgroundColor: sColor + '18', borderColor: sColor + '40' }]}>
-                    <Text style={[styles.signalText, { color: sColor }]}>{p.sinyal}</Text>
-                  </View>
-                </View>
-
-                <View style={styles.pozGrid}>
-                  <View style={styles.pozGridItem}>
-                    <Text style={styles.pozGridVal}>{p.giris_fiyat?.toFixed(2)}</Text>
-                    <Text style={styles.pozGridLbl}>GİRİŞ TL</Text>
-                  </View>
-                  <View style={styles.pozGridItem}>
-                    <Text style={[styles.pozGridVal, { color: colors.red }]}>{p.stop_fiyat?.toFixed(2)}</Text>
-                    <Text style={styles.pozGridLbl}>STOP -%{p.stop_pct}</Text>
-                  </View>
-                  <View style={styles.pozGridItem}>
-                    <Text style={[styles.pozGridVal, { color: colors.green }]}>{p.hedef_fiyat?.toFixed(2)}</Text>
-                    <Text style={styles.pozGridLbl}>HEDEF +%{p.hedef_pct}</Text>
-                  </View>
-                  <View style={styles.pozGridItem}>
-                    <Text style={styles.pozGridVal}>{p.adet}</Text>
-                    <Text style={styles.pozGridLbl}>ADET</Text>
-                  </View>
-                </View>
-
-                <View style={styles.pozMeta}>
-                  <Text style={styles.pozMetaText}>RSI {p.rsi?.toFixed(1)}</Text>
-                  <Text style={styles.pozMetaText}>{p.maliyet_tl?.toFixed(0)} TL maliyet</Text>
-                  <Text style={styles.pozMetaText}>Skor {p.skor}/10</Text>
-                </View>
-
-                {(p.gerekceler || []).map((g, i) => (
-                  <Text key={i} style={styles.gerekce}>{g}</Text>
-                ))}
-
-                <TouchableOpacity
-                  style={[styles.alBtn, alindi && styles.alBtnDone]}
-                  onPress={() => !alindi && handleAlindi(p)}
-                  disabled={alindi}
-                >
-                  <Text style={[styles.alBtnText, alindi && { color: colors.green }]}>
-                    {alindi ? '✅ POZİSYON AÇILDI' : 'ALDIM →'}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            );
-          })}
         </View>
-      )}
-    </ScrollView>
+
+        {/* Risk */}
+        <View style={styles.block}>
+          <Text style={styles.fieldLabel}>RİSK PROFİLİ</Text>
+          <View style={styles.riskRow}>
+            {RISK_OPTIONS.map((r) => (
+              <TouchableOpacity
+                key={r.key}
+                style={[styles.riskBtn, risk === r.key && styles.riskBtnActive]}
+                onPress={() => setRisk(r.key)}
+              >
+                <Text style={[styles.riskLabel, risk === r.key && { color: colors.primary }]}>
+                  {r.label}
+                </Text>
+                <Text style={styles.riskSub}>{r.sub}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
+        {/* Tarama Butonu */}
+        <TouchableOpacity
+          style={[styles.mainBtn, loading && { opacity: 0.7 }]}
+          onPress={handleOlustur}
+          disabled={loading}
+        >
+          {loading ? (
+            <View style={{ alignItems: 'center', gap: 8 }}>
+              <ActivityIndicator color={colors.black} />
+              <Text style={styles.mainBtnSub}>{LOADING_MESSAGES[loadingMsgIdx]}</Text>
+              <Text style={[styles.mainBtnSub, { fontSize: 10, opacity: 0.7 }]}>~1 dakika sürebilir</Text>
+            </View>
+          ) : (
+            <Text style={styles.mainBtnText}>TARAMI BAŞLAT</Text>
+          )}
+        </TouchableOpacity>
+
+        {/* Hata */}
+        {sonuc?.error && (
+          <View style={styles.errorBox}>
+            <Text style={styles.errorTitle}>SİNYAL BULUNAMADI</Text>
+            <Text style={styles.errorText}>{sonuc.error}</Text>
+            <Text style={styles.errorSub}>Taranan: {sonuc.taranan} hisse</Text>
+          </View>
+        )}
+
+        {/* Sonuçlar */}
+        {sonuc && !sonuc.error && (
+          <View style={styles.resultWrap}>
+            <View style={styles.resultSummary}>
+              <Text style={styles.resultLabel}>TARAMA TAMAMLANDI</Text>
+              <Text style={styles.resultDesc}>
+                {sonuc.taranan_hisse} hisse tarandı, {sonuc.bulunan_aday} aday bulundu
+              </Text>
+              <View style={styles.budgetRow}>
+                <View style={styles.budgetItem}>
+                  <Text style={styles.budgetVal}>{sonuc.kullanilan_butce?.toFixed(0)} TL</Text>
+                  <Text style={styles.budgetLbl}>KULLANILAN</Text>
+                </View>
+                <View style={styles.budgetSep} />
+                <View style={styles.budgetItem}>
+                  <Text style={[styles.budgetVal, { color: colors.green }]}>
+                    {sonuc.kalan_nakit?.toFixed(0)} TL
+                  </Text>
+                  <Text style={styles.budgetLbl}>KALAN NAKİT</Text>
+                </View>
+              </View>
+            </View>
+
+            {sonuc.athena_analiz && !sonuc.athena_analiz.includes('alınamadı') && (
+              <View style={styles.analizBox}>
+                <Text style={styles.analizLabel}>ATHENA ANALİZ</Text>
+                <Text style={styles.analizText}>{sonuc.athena_analiz}</Text>
+              </View>
+            )}
+
+            {(sonuc.pozisyonlar || []).map((p) => {
+              const alindi = alindiIds.includes(p.id);
+              const sColor = p.sinyal?.includes('AL') ? colors.green : colors.red;
+              return (
+                <View key={p.id} style={styles.pozCard}>
+                  <View style={styles.pozTop}>
+                    <Text style={styles.pozSembol}>{p.sembol}</Text>
+                    <View style={[styles.signalBadge, {
+                      backgroundColor: sColor + '18',
+                      borderColor: sColor + '40',
+                    }]}>
+                      <Text style={[styles.signalText, { color: sColor }]}>{p.sinyal}</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.pozGrid}>
+                    <View style={styles.pozGridItem}>
+                      <Text style={styles.pozGridVal}>{p.giris_fiyat?.toFixed(2)}</Text>
+                      <Text style={styles.pozGridLbl}>GİRİŞ TL</Text>
+                    </View>
+                    <View style={styles.pozGridItem}>
+                      <Text style={[styles.pozGridVal, { color: colors.red }]}>
+                        {p.stop_fiyat?.toFixed(2)}
+                      </Text>
+                      <Text style={styles.pozGridLbl}>STOP -%{p.stop_pct}</Text>
+                    </View>
+                    <View style={styles.pozGridItem}>
+                      <Text style={[styles.pozGridVal, { color: colors.green }]}>
+                        {p.hedef_fiyat?.toFixed(2)}
+                      </Text>
+                      <Text style={styles.pozGridLbl}>HEDEF +%{p.hedef_pct}</Text>
+                    </View>
+                    <View style={styles.pozGridItem}>
+                      <Text style={styles.pozGridVal}>{p.adet}</Text>
+                      <Text style={styles.pozGridLbl}>ADET</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.pozMeta}>
+                    <Text style={styles.pozMetaText}>RSI {p.rsi?.toFixed(1)}</Text>
+                    <Text style={styles.pozMetaText}>{p.maliyet_tl?.toFixed(0)} TL maliyet</Text>
+                    <Text style={styles.pozMetaText}>Skor {p.skor}/10</Text>
+                  </View>
+
+                  {(p.gerekceler || []).map((g, i) => (
+                    <Text key={i} style={styles.gerekce}>{g}</Text>
+                  ))}
+
+                  <TouchableOpacity
+                    style={[styles.alBtn, alindi && styles.alBtnDone]}
+                    onPress={() => !alindi && handleAlindi(p)}
+                    disabled={alindi}
+                  >
+                    <Text style={[styles.alBtnText, alindi && { color: colors.green }]}>
+                      {alindi ? '✅ POZİSYON AÇILDI' : 'ALDIM →'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              );
+            })}
+          </View>
+        )}
+      </ScrollView>
+
+      <AthenaModal
+        visible={modal.visible}
+        title={modal.title}
+        message={modal.message}
+        icon={modal.icon}
+        buttons={modal.buttons}
+      />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg },
   header: { paddingHorizontal: spacing.lg, paddingTop: spacing.lg, paddingBottom: spacing.lg },
   headerLabel: { fontSize: 9, color: colors.textSecondary, letterSpacing: 2, fontWeight: '700' },
   headerTitle: { fontSize: 30, fontWeight: '900', color: colors.white, letterSpacing: -0.5, marginTop: 4, lineHeight: 36 },
+  headerSub: { fontSize: 10, color: colors.textMuted, marginTop: 6 },
+
   block: { paddingHorizontal: spacing.lg, marginBottom: spacing.lg },
   fieldLabel: { fontSize: 9, color: colors.textSecondary, letterSpacing: 2, fontWeight: '700', marginBottom: 10 },
+
   input: {
     backgroundColor: colors.bgCard, borderWidth: 1, borderColor: colors.border,
     borderRadius: radius.md, paddingVertical: 16, paddingHorizontal: 16,
     color: colors.white, fontSize: 28, fontWeight: '800',
   },
   hisseHint: { fontSize: 12, color: colors.textSecondary, marginTop: 8 },
+
   riskRow: { gap: 8 },
   riskBtn: {
     backgroundColor: colors.bgCard, borderWidth: 1, borderColor: colors.border,
@@ -267,12 +343,14 @@ const styles = StyleSheet.create({
   riskBtnActive: { borderColor: colors.primary },
   riskLabel: { fontSize: 13, fontWeight: '800', color: colors.white, marginBottom: 3, letterSpacing: 1 },
   riskSub: { fontSize: 11, color: colors.textSecondary },
+
   mainBtn: {
     backgroundColor: colors.primary, marginHorizontal: spacing.lg,
     borderRadius: radius.md, paddingVertical: 18, alignItems: 'center', marginBottom: spacing.lg,
   },
   mainBtnText: { color: colors.black, fontWeight: '900', fontSize: 14, letterSpacing: 2 },
-  mainBtnSub: { color: colors.black, fontSize: 12, letterSpacing: 0.5 },
+  mainBtnSub: { color: colors.black, fontSize: 12 },
+
   errorBox: {
     backgroundColor: colors.redDim, borderRadius: radius.md, borderWidth: 1,
     borderColor: colors.red, margin: spacing.lg, padding: spacing.md,
@@ -280,6 +358,7 @@ const styles = StyleSheet.create({
   errorTitle: { fontSize: 9, color: colors.red, fontWeight: '700', letterSpacing: 2, marginBottom: 8 },
   errorText: { fontSize: 13, color: colors.red, lineHeight: 20 },
   errorSub: { fontSize: 11, color: colors.textSecondary, marginTop: 8 },
+
   resultWrap: { paddingHorizontal: spacing.lg },
   resultSummary: {
     backgroundColor: colors.bgCard, borderRadius: radius.lg, borderWidth: 1,
@@ -292,12 +371,14 @@ const styles = StyleSheet.create({
   budgetVal: { fontSize: 18, fontWeight: '800', color: colors.white },
   budgetLbl: { fontSize: 9, color: colors.textSecondary, letterSpacing: 1.5, marginTop: 3 },
   budgetSep: { width: 1, height: 30, backgroundColor: colors.border },
+
   analizBox: {
     backgroundColor: colors.bgCard, borderRadius: radius.md, borderWidth: 1,
     borderColor: colors.primaryBorder, padding: spacing.md, marginBottom: spacing.md,
   },
   analizLabel: { fontSize: 9, color: colors.primary, letterSpacing: 2, fontWeight: '700', marginBottom: 8 },
   analizText: { fontSize: 13, color: colors.textSecondary, lineHeight: 21 },
+
   pozCard: {
     backgroundColor: colors.bgCard, borderRadius: radius.lg, borderWidth: 1,
     borderColor: colors.border, padding: spacing.md, marginBottom: spacing.md,
@@ -306,13 +387,17 @@ const styles = StyleSheet.create({
   pozSembol: { fontSize: 22, fontWeight: '900', color: colors.white, letterSpacing: 0.5 },
   signalBadge: { borderRadius: 6, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 4 },
   signalText: { fontSize: 10, fontWeight: '800', letterSpacing: 1 },
+
   pozGrid: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
   pozGridItem: { alignItems: 'center' },
   pozGridVal: { fontSize: 15, fontWeight: '800', color: colors.white },
   pozGridLbl: { fontSize: 8, color: colors.textSecondary, letterSpacing: 1, marginTop: 3 },
+
   pozMeta: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 },
   pozMetaText: { fontSize: 10, color: colors.textSecondary },
+
   gerekce: { fontSize: 12, color: colors.textSecondary, marginBottom: 3, lineHeight: 18 },
+
   alBtn: {
     backgroundColor: colors.primary, borderRadius: radius.md,
     paddingVertical: 13, alignItems: 'center', marginTop: 14,

@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { View, Text, TouchableOpacity, Dimensions } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import * as Notifications from 'expo-notifications';
 
 import DashboardScreen from './src/screens/DashboardScreen';
 import BudgetScreen from './src/screens/BudgetScreen';
@@ -12,11 +13,11 @@ import PositionsScreen from './src/screens/PositionsScreen';
 import ChatScreen from './src/screens/ChatScreen';
 import HistoryScreen from './src/screens/HistoryScreen';
 import { colors } from './src/theme';
+import { registerForPushNotifications } from './src/services/notificationService';
 
 const Tab = createBottomTabNavigator();
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
-// — View tabanlı ikonlar —
 function DashIcon({ color }) {
   return (
     <View style={{ width: 16, height: 16, alignItems: 'center', justifyContent: 'center' }}>
@@ -62,14 +63,13 @@ function HistoryIcon({ color }) {
 }
 
 const TAB_CONFIG = [
-  { name: 'Dashboard', Icon: DashIcon,    label: 'ANA SAYFA' },
+  { name: 'Dashboard', Icon: DashIcon,    label: 'BOARD' },
   { name: 'Budget',    Icon: BudgetIcon,  label: 'BÜTÇE' },
   { name: 'Positions', Icon: PozIcon,     label: 'POZİSYON' },
   { name: 'Chat',      Icon: ChatIcon,    label: 'ATHENA' },
   { name: 'History',   Icon: HistoryIcon, label: 'GEÇMİŞ' },
 ];
 
-// Tamamen custom tab bar — wrap sorunu yok
 function CustomTabBar({ state, navigation }) {
   const insets = useSafeAreaInsets();
   const itemWidth = SCREEN_WIDTH / TAB_CONFIG.length;
@@ -138,6 +138,29 @@ function AppNavigator() {
 }
 
 export default function App() {
+  const notificationListener = useRef();
+  const responseListener = useRef();
+
+  useEffect(() => {
+    // Push notification setup
+    registerForPushNotifications();
+
+    // Bildirim geldiğinde (uygulama açıkken)
+    notificationListener.current = Notifications.addNotificationReceivedListener(notification => {
+      console.log('Bildirim alındı:', notification);
+    });
+
+    // Bildirime tıklandığında
+    responseListener.current = Notifications.addNotificationResponseReceivedListener(response => {
+      console.log('Bildirime tıklandı:', response);
+    });
+
+    return () => {
+      Notifications.removeNotificationSubscription(notificationListener.current);
+      Notifications.removeNotificationSubscription(responseListener.current);
+    };
+  }, []);
+
   return (
     <SafeAreaProvider>
       <StatusBar style="light" backgroundColor="#000000" />
